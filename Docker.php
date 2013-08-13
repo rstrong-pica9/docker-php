@@ -1,61 +1,100 @@
 <?php
+use Guzzle\Http\Client;
 
 /**
  * Docker
  */
-class Docker {
-
-    const URL = 'unix:///var/run/docker.sock';
+class Docker
+{
 
     private $connection;
 
-    public function __construct() {
+    public function __construct($url)
+    {
 
-        $this->connection = fsockopen(self::URL);
+        $this->connection = new Client($url);
     }
 
-    public function getPort($id, $privatePort) {
+    public function getPort($id, $privatePort)
+    {
 
-
-        $response = $this->send("/containers/$id/json");
-
-        $container = json_decode($response['text'], true);
+        $container = $this->getJson($id);
 
         $tcp = $container['NetworkSettings']['PortMapping']['Tcp'];
 
         return isset($tcp[$privatePort]) ? $tcp[$privatePort] : '';
     }
 
-    protected function send($url) {
+    public function createContainer($image, $options = array())
+    {
 
-        $out = "GET $url HTTP/1.1\r\n";
-        $out .= "Connection: Close\r\n\r\n";
+        $options['Image'] = $image;
 
-        fwrite($this->connection, $out);
+        #$options = array_merge($this->getDefaultContainerConfig(), $options);
 
-        $rsp = "";
-        while (!feof($this->connection)) {
-            $rsp .= fgets($this->connection, 128);
-        }
-        fclose($this->connection);
+        $options = json_encode($options, JSON_FORCE_OBJECT);
 
-        list($headers, $response['text']) = explode("\r\n\r\n", $rsp);
+        $request = $this->connection->post("/containers/create", null, null, array('body' => $options));
 
-        $headers = explode("\r\n", $headers);
-        $statusLine = array_shift($headers);
+        $response = $request->send();
 
-        $response['header']['status'] = $statusLine;
-
-        foreach ($headers as $header) {
-            list($key, $val) = explode(': ', $header);
-            $response['header'][$key] = $val;
+        if ($response->isError()) {
+            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
         }
 
-        if ($statusLine != 'HTTP/1.1 200 OK') {
-            throw new \Exception($statusLine);
+        $data = json_decode((string) $response->getBody(), true);
+
+        return $data['Id'];
+    }
+
+    public function startContainer($id, $binds)
+    {
+
+        $response = $this->connection->post("/containers/$id/start", null, null, array('Binds' => $binds))->send();
+
+        if ($response->isError()) {
+            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
         }
 
-        return $response;
+        return true;
+    }
+
+    protected function getJson($id)
+    {
+
+        $response = $this->connection->get("/containers/$id/json")->send();
+
+        if ($response->isError()) {
+            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
+        }
+
+        return json_decode((string) $response->getBody(), true);
+    }
+
+    protected function getDefaultContainerConfig()
+    {
+
+        return array(
+            'Hostname' => '',
+            'User' => '',
+            'Memory' => 0,
+            'MemorySwap' => 0,
+            'AttachStdin' => false,
+            'AttachStdout' => true,
+            'AttachStderr' => true,
+            'PortSpecs' => null,
+            'Tty' => false,
+            'OpenStdin' => false,
+            'StdinOnce' => false,
+            'Env' => null,
+            #'Cmd' => array('date'),
+            'Dns' => null,
+            'Image' => 'base',
+            'Volumes' => array(),
+            'VolumesFrom' => ''
+        );
+
+
     }
 
 }
