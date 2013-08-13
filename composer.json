@@ -1,0 +1,16 @@
+{
+    "name": "fritze/docker-php",
+    "description": "Library to connect to docker",
+    "authors": [
+        {
+            "name": "Christian Fritsch",
+            "email": "chr.fritsch@gmx.net"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.2"
+    },
+    "suggest": {
+        "guzzle/guzzle": ">=3.7"
+    }
+}
