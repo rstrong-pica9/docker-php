@@ -10,8 +10,6 @@ class Docker
 
     private $url;
 
-    private $connection;
-
     /**
      * Constructs a new docker object
      *
@@ -86,8 +84,6 @@ class Docker
     {
 
         $options['Image'] = $image;
-
-        $options = json_encode($options, JSON_FORCE_OBJECT);
 
         $body = $this->post("/containers/create", $options);
 
@@ -169,12 +165,7 @@ class Docker
      */
     public function startContainer($id, $binds = array())
     {
-
-        $response = $this->connection->post("/containers/$id/start", null, null, array('Binds' => $binds))->send();
-
-        if ($response->isError()) {
-            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
-        }
+        $this->post("/containers/$id/start", array('Binds' => $binds));
 
         return true;
     }
@@ -196,11 +187,7 @@ class Docker
     public function stopContainer($id, $timeout = 5)
     {
 
-        $response = $this->connection->post("/containers/$id/stop?t=$timeout")->send();
-
-        if ($response->isError()) {
-            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
-        }
+        $this->post("/containers/$id/stop?t=$timeout");
 
         return true;
     }
@@ -222,11 +209,7 @@ class Docker
     public function restartContainer($id, $timeout = 5)
     {
 
-        $response = $this->connection->post("/containers/$id/restart?t=$timeout")->send();
-
-        if ($response->isError()) {
-            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
-        }
+        $this->post("/containers/$id/restart?t=$timeout");
 
         return true;
     }
@@ -245,11 +228,7 @@ class Docker
     public function killContainer($id)
     {
 
-        $response = $this->connection->post("/containers/$id/kill")->send();
-
-        if ($response->isError()) {
-            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
-        }
+        $this->post("/containers/$id/kill");
 
         return true;
     }
@@ -275,38 +254,89 @@ class Docker
     protected function get($url)
     {
 
+        if (substr($this->url, 0, 7) == 'http://') {
+            return $this->httpGet($url);
+        } else {
+            return $this->send('GET', $url);
+        }
+
+    }
+
+    protected function httpGet($url)
+    {
+
         $request = new \HttpRequest($this->url . $url, \HttpRequest::METH_GET);
 
         try {
             $request->send();
-            if ($request->getResponseCode() == 200) {
+            if ($request->getResponseCode() >= 200 && $request->getResponseCode() < 300) {
                 return $request->getResponseBody();
             }
         } catch (\HttpException $ex) {
-            throw new \Exception($request->getResponseBody(), $request->getResponseStatus());
+            throw new \Exception($ex->getMessage(), $ex->getCode());
         }
 
         return '';
     }
 
-    protected function post($url, $data = '')
+    protected function post($url, $data = "")
     {
 
-        $request = new \HttpRequest($this->url . $url, \HttpRequest::METH_POST);
-        $request->addRawPostData($data);
+        if (substr($this->url, 0, 7) == 'http://') {
+            return $this->httpPost($url, $data);
+        } else {
+            return $this->send('POST', $url, $data);
+        }
+
+    }
+
+
+    protected function httpPost($url, $data)
+    {
+
+        $request = new \HttpRequest($url, \HttpRequest::METH_POST, array('proxyhost' => $this->url));
+
+        $request->setBody(json_encode($data, JSON_FORCE_OBJECT));
+
 
         try {
-
             $request->send();
-            if ($request->getResponseCode() == 200) {
+            if ($request->getResponseCode() >= 200 && $request->getResponseCode() < 300) {
                 return $request->getResponseBody();
             }
         } catch (\HttpException $ex) {
-            throw new \Exception($request->getResponseBody(), $request->getResponseStatus());
+            throw new \Exception($ex->getMessage(), $ex->getCode());
         }
 
         return '';
 
+    }
+
+    protected function send($method, $url, $body = '')
+    {
+
+        $body = json_encode($body, JSON_FORCE_OBJECT);
+
+        $length = strlen($body);
+        $data = '';
+        $fp = fsockopen($this->url, null, $errno, $errstr, 30);
+        if (!$fp) {
+            echo "$errstr ($errno)<br />\n";
+        } else {
+            $out = "$method $url HTTP/1.1\r\n";
+            $out .= "Content-Length: $length\r\n";
+            $out .= "Connection: Close\r\n\r\n$body";
+
+            fwrite($fp, $out);
+            while (!feof($fp)) {
+                $data .= fgets($fp, 1024);
+            }
+            fclose($fp);
+        }
+
+        $data = http_parse_message($data);
+
+        return $data->body;
     }
 
 }
