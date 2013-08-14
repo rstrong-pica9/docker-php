@@ -2,15 +2,13 @@
 
 namespace Docker;
 
-use Docker\Client\AbstractClient;
-use Docker\Client\HttpClient;
-use Docker\Client\SocketClient;
-
 /**
  * Docker
  */
 class Docker
 {
+
+    private $url;
 
     private $connection;
 
@@ -21,14 +19,8 @@ class Docker
      */
     public function __construct($url)
     {
-        $availableClients = array(new HttpClient($url), new SocketClient($url));
 
-        /** @var $client AbstractClient */
-        foreach ($availableClients as $client) {
-            if ($client->isApplicable($url)) {
-                $this->connection = $client;
-            }
-        }
+        $this->url = $url;
     }
 
     /**
