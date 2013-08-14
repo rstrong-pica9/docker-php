@@ -12,6 +12,6 @@
         "ext-http" : "*"
     },
     "autoload": {
-        "psr-0": { "Docker\\": "" }
+        "psr-0": { "Docker\\": "src/" }
     }
 }

@@ -89,13 +89,9 @@ class Docker
 
         $options = json_encode($options, JSON_FORCE_OBJECT);
 
-        $response = $this->connection->post("/containers/create", null, null, array('body' => $options))->send();
+        $body = $this->post("/containers/create", $options);
 
-        if ($response->isError()) {
-            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
-        }
-
-        $data = json_decode($response->getBody(true), true);
+        $data = json_decode($body, true);
 
         return $data['Id'];
     }
@@ -263,7 +259,6 @@ class Docker
     {
 
         $container = $this->inspectContainer($id);
-
         $tcp = $container['NetworkSettings']['PortMapping']['Tcp'];
 
         return isset($tcp[$privatePort]) ? $tcp[$privatePort] : '';
@@ -272,44 +267,45 @@ class Docker
 
     protected function getJson($url)
     {
+        $body = $this->get($url);
 
-        $request = new HttpRequest($this->url . '/' . $url, HttpRequest::METH_GET);
+        return json_decode($body, true);
+    }
+
+    protected function get($url)
+    {
+
+        $request = new \HttpRequest($this->url . $url, \HttpRequest::METH_GET);
 
         try {
             $request->send();
             if ($request->getResponseCode() == 200) {
-                return json_decode((string) $request->getResponseBody(), true);
+                return $request->getResponseBody();
             }
-        } catch (HttpException $ex) {
-            throw new \Exception((string) $request->getResponseBody(), $request->getResponseStatus());
+        } catch (\HttpException $ex) {
+            throw new \Exception($request->getResponseBody(), $request->getResponseStatus());
         }
 
         return '';
     }
 
-    protected function getDefaultContainerConfig()
+    protected function post($url, $data = '')
     {
 
-        return array(
-            'Hostname' => '',
-            'User' => '',
-            'Memory' => 0,
-            'MemorySwap' => 0,
-            'AttachStdin' => false,
-            'AttachStdout' => true,
-            'AttachStderr' => true,
-            'PortSpecs' => null,
-            'Tty' => false,
-            'OpenStdin' => false,
-            'StdinOnce' => false,
-            'Env' => null,
-            #'Cmd' => array('date'),
-            'Dns' => null,
-            'Image' => 'base',
-            'Volumes' => array(),
-            'VolumesFrom' => ''
-        );
+        $request = new \HttpRequest($this->url . $url, \HttpRequest::METH_POST);
+        $request->addRawPostData($data);
 
+        try {
+
+            $request->send();
+            if ($request->getResponseCode() == 200) {
+                return $request->getResponseBody();
+            }
+        } catch (\HttpException $ex) {
+            throw new \Exception($request->getResponseBody(), $request->getResponseStatus());
+        }
+
+        return '';
 
     }
 
