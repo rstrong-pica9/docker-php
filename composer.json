@@ -9,7 +9,7 @@
     ],
     "require": {
         "php": ">=5.3.2",
-        "ext-pecl_http" : "*"
+        "ext-http" : "*"
     },
     "autoload": {
         "psr-0": { "Docker\\": "" }

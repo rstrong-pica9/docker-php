@@ -273,13 +273,18 @@ class Docker
     protected function getJson($url)
     {
 
-        $response = $this->connection->get($url);
+        $request = new HttpRequest($this->url . '/' . $url, HttpRequest::METH_GET);
 
-        if ($response->isError()) {
-            throw new \Exception((string) $response->getBody(), $response->getStatusCode());
+        try {
+            $request->send();
+            if ($request->getResponseCode() == 200) {
+                return json_decode((string) $request->getResponseBody(), true);
+            }
+        } catch (HttpException $ex) {
+            throw new \Exception((string) $request->getResponseBody(), $request->getResponseStatus());
         }
 
-        return json_decode((string) $response->getBody(), true);
+        return '';
     }
 
     protected function getDefaultContainerConfig()
