@@ -92,6 +92,15 @@ class Docker
         return $data['Id'];
     }
 
+
+    public function deleteContainer($id, $removeVolumes = false)
+    {
+
+        $this->delete("/containers/$id?v=$removeVolumes");
+
+        return true;
+    }
+
     /**
      * Inspects a container
      *
@@ -165,7 +174,10 @@ class Docker
      */
     public function startContainer($id, $binds = array())
     {
-        $this->post("/containers/$id/start", array('Binds' => $binds));
+        if ($binds) {
+            $binds = array('Binds' => $binds);
+        }
+        $this->post("/containers/$id/start", $binds);
 
         return true;
     }
@@ -251,53 +263,45 @@ class Docker
         return json_decode($body, true);
     }
 
+    protected function delete($url)
+    {
+
+        if (substr($this->url, 0, 7) == 'http://') {
+            return $this->sendHttp($url, \HttpRequest::METH_DELETE);
+        } else {
+            return $this->sendSocket('DELETE', $url);
+        }
+    }
+
     protected function get($url)
     {
-
         if (substr($this->url, 0, 7) == 'http://') {
-            return $this->httpGet($url);
+            return $this->sendHttp($url, \HttpRequest::METH_GET);
         } else {
-            return $this->send('GET', $url);
+            return $this->sendSocket('GET', $url);
         }
-
     }
 
-    protected function httpGet($url)
-    {
-
-        $request = new \HttpRequest($this->url . $url, \HttpRequest::METH_GET);
-
-        try {
-            $request->send();
-            if ($request->getResponseCode() >= 200 && $request->getResponseCode() < 300) {
-                return $request->getResponseBody();
-            }
-        } catch (\HttpException $ex) {
-            throw new \Exception($ex->getMessage(), $ex->getCode());
-        }
-
-        return '';
-    }
-
-    protected function post($url, $data = "")
+    protected function post($url, $data = array())
     {
 
         if (substr($this->url, 0, 7) == 'http://') {
-            return $this->httpPost($url, $data);
+            return $this->sendHttp($url, \HttpRequest::METH_POST, $data);
         } else {
-            return $this->send('POST', $url, $data);
+            return $this->sendSocket('POST', $url, $data);
         }
-
     }
 
 
-    protected function httpPost($url, $data)
+    protected function sendHttp($url, $method, $data = array())
     {
 
-        $request = new \HttpRequest($url, \HttpRequest::METH_POST, array('proxyhost' => $this->url));
+        $request = new \HttpRequest($this->url . $url, $method);
 
-        $request->setBody(json_encode($data, JSON_FORCE_OBJECT));
+        if ($data) {
 
+            $request->setBody(json_encode($data, JSON_FORCE_OBJECT));
+        }
 
         try {
             $request->send();
@@ -312,12 +316,14 @@ class Docker
 
     }
 
-    protected function send($method, $url, $body = '')
+    protected function sendSocket($method, $url, $body = array())
     {
+        $bodyString = "";
+        if ($body) {
+            $bodyString = json_encode($body, JSON_FORCE_OBJECT);
+        }
 
-        $body = json_encode($body, JSON_FORCE_OBJECT);
-
-        $length = strlen($body);
+        $length = strlen($bodyString);
         $data = '';
         $fp = fsockopen($this->url, null, $errno, $errstr, 30);
         if (!$fp) {
@@ -325,7 +331,7 @@ class Docker
         } else {
             $out = "$method $url HTTP/1.1\r\n";
             $out .= "Content-Length: $length\r\n";
-            $out .= "Connection: Close\r\n\r\n$body";
+            $out .= "Connection: Close\r\n\r\n$bodyString";
 
             fwrite($fp, $out);
             while (!feof($fp)) {
@@ -333,10 +339,14 @@ class Docker
             }
             fclose($fp);
         }
-
         $data = http_parse_message($data);
 
-        return $data->body;
+        if ($data->responseCode >= 200 && $data->responseCode < 300) {
+            return $data->body;
+        } else {
+            throw new \Exception($data->body, $data->responseCode);
+
+        }
     }
 
 }
