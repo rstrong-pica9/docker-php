@@ -50,6 +50,31 @@ class Docker
         return $this->getJson("/containers/json?" . http_build_query($conditions));
     }
 
+    /**
+     * Gets a list of images
+     *
+     * @param array $conditions
+     *
+     *   Conditions might be:
+     *     all    => true or false, Show all containers. Only running containers are shown by default
+     *
+     * @throws \Exception
+     *
+     * @return mixed
+     */
+    public function listImages($conditions = array())
+    {
+        $availableKeys = array('all');
+
+        foreach ($conditions as $key => $value) {
+            if (!in_array($key, $availableKeys)) {
+                throw new \Exception("Key $key is not available");
+            }
+        }
+
+        return $this->getJson("/images/json?" . http_build_query($conditions));
+    }
+
 
     /**
      * Creates a new container
